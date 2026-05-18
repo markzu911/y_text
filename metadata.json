@@ -1,0 +1,8 @@
+{
+  "name": "饮品海报 AI 生成器",
+  "description": "基于 AI 的专业饮品海报生成工具。支持图片识、风格选择、自定义尺寸和多级清晰度调节。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
