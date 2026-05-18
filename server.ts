@@ -8,7 +8,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // Middleware for JSON parsing with higher limit for base64 images
   app.use(express.json({ limit: '10mb' }));
