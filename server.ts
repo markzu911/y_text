@@ -8,13 +8,20 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Middleware for JSON parsing with higher limit for base64 images
   app.use(express.json({ limit: '10mb' }));
 
   // Initialize Gemini AI
-  const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || '');
+  const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY || '',
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 
   // API Route: Analyze Image
   app.post("/api/analyze", async (req, res) => {
@@ -22,20 +29,24 @@ async function startServer() {
       const { image } = req.body;
       if (!image) return res.status(400).json({ error: "Image is required" });
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const prompt = "分析这张饮料图片。识别饮品类型、主色调、可见配料（如冰块、水果、薄荷）以及氛围（如：清爽、温暖、优雅）。提供一段简短的描述，用于生成一张创意海报。";
 
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: image.split(',')[1]
-          }
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite", // Using a reliable model for analysis
+        contents: {
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: image.split(',')[1]
+              }
+            }
+          ]
         }
-      ]);
+      });
 
-      res.json({ analysis: result.response.text() });
+      res.json({ analysis: response.text || '一杯清爽的饮品' });
     } catch (error: any) {
       console.error("Analysis Error:", error);
       res.status(500).json({ error: error.message });
@@ -47,10 +58,7 @@ async function startServer() {
     try {
       const { prompt, image, ratio, modelType, quality } = req.body;
       
-      // Use the preview model for image generation
-      // Note: In a real environment, you'd handle model selection logic here
       const modelName = modelType === 'Gemini 3.1' ? 'gemini-3.1-flash-image-preview' : 'gemini-2.5-flash-image';
-      const model = genAI.getGenerativeModel({ model: modelName });
 
       const parts: any[] = [{ text: prompt }];
       if (image) {
@@ -62,9 +70,10 @@ async function startServer() {
         });
       }
 
-      const result = await (model as any).generateContent({
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: { parts },
+        config: {
           imageConfig: {
             aspectRatio: ratio,
             ...(modelType === 'Gemini 3.1' ? { imageSize: quality } : {})
@@ -72,13 +81,15 @@ async function startServer() {
         }
       });
 
-      const response = await result.response;
       let imageData: string | null = null;
       
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          imageData = `data:image/png;base64,${part.inlineData.data}`;
-          break;
+      // Correct extraction of image part
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            imageData = `data:image/png;base64,${part.inlineData.data}`;
+            break;
+          }
         }
       }
 
